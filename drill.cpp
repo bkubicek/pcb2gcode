@@ -164,6 +164,7 @@ void ExcellonProcessor::millhole(std::ofstream &of,float x, float y,  shared_ptr
 		of<<"G0 X"<< x<<" Y" << y<< endl;
 		//of<<"G1 Z"<<cutter->zwork<<endl;
 		//of<<"G0 Z"<<cutter->zsafe<<endl<<endl;
+    of<<"G0 Z0"<<endl;
 		of<<"G1 Z#50"<<endl;
 		of<<"G0 Z#51"<<endl<<endl;
 	}
@@ -180,6 +181,7 @@ void ExcellonProcessor::millhole(std::ofstream &of,float x, float y,  shared_ptr
 			z_step=1; //dummy to exit the loop
 		}
 		int stepcount=abs( int( cutter->zwork / z_step )) ;
+    of<<"G0 Z0"<<endl;
 		while( z >= cutter->zwork ) 
 		{
 			//of<<"G1 Z"<<z<<endl;
