@@ -101,7 +101,7 @@ void simplifypath(shared_ptr<icoords> outline, double accuracy)
 	// than the accuracy, all the points in between can be removed..
 	bool change;
 	int lasterased=0;
-	const bool debug=false;
+	const bool debug=true;
 	std::list<icoordpair> l;
 	for(int i=0;i<outline->size();i++)
 	{
@@ -109,7 +109,7 @@ void simplifypath(shared_ptr<icoords> outline, double accuracy)
 		l.push_back(ii);
 	}
 
-	if (debug) cerr<<"outline size:"<<outline->size()<<endl;
+	if (debug) cerr<<"outline size:"<<outline->size()<<" accuracy"<<accuracy<<endl;
 	int pos=0;
 	do //cycle until no two points can be combined..
 	{
@@ -191,7 +191,7 @@ Surface::get_toolpath( shared_ptr<RoutingMill> mill, bool mirrored, bool mirror_
 							    min_y + max_y - ypt2i(c.second) ) );
 			}
 
-			if(0) simplifypath(outline,0.005);
+			if(1) simplifypath(outline, 1/float(dpi)      );
 			outside.clear();
 			toolpath.push_back(outline);
 		}
