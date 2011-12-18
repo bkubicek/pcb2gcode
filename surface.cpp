@@ -18,6 +18,11 @@
  */
 
 #include "surface.hpp"
+#include <fstream>
+#include <boost/format.hpp>
+#include "geometry.h"
+
+using namespace std;
 using std::pair;
 
 // color definitions for the ARGB32 format used
@@ -81,71 +86,71 @@ using std::cout;
 using std::endl;
 
 using std::list;
-double distancePointLine(const icoordpair &x,const icoordpair &la,const  icoordpair &lb)
-{
-	icoordpair nab; //normal vector to a-b= {-ab_y,ab_x}
-	nab.first=-(la.second-lb.second);
-	nab.second=(la.first-lb.first);
-	double lnab=sqrt(nab.first*nab.first+nab.second*nab.second);
-	double skalar; //product
-
-	skalar=nab.first*(x.first-la.first)+nab.second*(x.second-la.second);
-	return fabs(skalar/lnab );
-}
-
-void simplifypath(shared_ptr<icoords> outline, double accuracy)
-{
-	//take two points of the path
-	// and their interconnecting path.
-	// if the distance between all intermediate points and this line is smaller
-	// than the accuracy, all the points in between can be removed..
-	bool change;
-	int lasterased=0;
-	const bool debug=true;
-	std::list<icoordpair> l;
-	for(int i=0;i<outline->size();i++)
-	{
-		icoordpair &ii=(*outline)[i];
-		l.push_back(ii);
-	}
-
-	if (debug) cerr<<"outline size:"<<outline->size()<<" accuracy"<<accuracy<<endl;
-	int pos=0;
-	do //cycle until no two points can be combined..
-	{
-		change=false;
-
-		list<icoordpair>::iterator a=l.begin();
-		do
-		{
-			list<icoordpair>::iterator b,c;
-			b=a;b++;
-			c=b;c++;
-			if((b==l.end()))
-				break;
-			double d=distancePointLine(*b, *a,*c);
-			if((d<accuracy) )
-			{
-
-				if(debug) cerr<<"erasing at"<<pos<<" of "<<l.size()<<" d="<<d<<endl;
-				a=l.erase(b);
-				change=true;
-			}
-			else
-				a=b;
-			pos++;
-		}while(a!=l.end());
-		//change=false;
-	}
-	while(change);
-
-	if(debug) cout<<"copying"<<endl;
-	outline->resize(0);
-	for( list<icoordpair>::iterator a=l.begin();a!=l.end();a++)
-		outline->push_back(*a);
-	if(debug) cerr<<"outline size:"<<outline->size()<<endl;
-
-}
+// double distancePointLine(const icoordpair &x,const icoordpair &la,const  icoordpair &lb)
+// {
+// 	icoordpair nab; //normal vector to a-b= {-ab_y,ab_x}
+// 	nab.first=-(la.second-lb.second);
+// 	nab.second=(la.first-lb.first);
+// 	double lnab=sqrt(nab.first*nab.first+nab.second*nab.second);
+// 	double skalar; //product
+// 
+// 	skalar=nab.first*(x.first-la.first)+nab.second*(x.second-la.second);
+// 	return fabs(skalar/lnab );
+// }
+// 
+// void simplifypath(shared_ptr<icoords> outline, double accuracy)
+// {
+// 	//take two points of the path
+// 	// and their interconnecting path.
+// 	// if the distance between all intermediate points and this line is smaller
+// 	// than the accuracy, all the points in between can be removed..
+// 	bool change;
+// 	int lasterased=0;
+// 	const bool debug=true;
+// 	std::list<icoordpair> l;
+// 	for(int i=0;i<outline->size();i++)
+// 	{
+// 		icoordpair &ii=(*outline)[i];
+// 		l.push_back(ii);
+// 	}
+// 
+// 	if (debug) cerr<<"outline size:"<<outline->size()<<" accuracy"<<accuracy<<endl;
+// 	int pos=0;
+// 	do //cycle until no two points can be combined..
+// 	{
+// 		change=false;
+// 
+// 		list<icoordpair>::iterator a=l.begin();
+// 		do
+// 		{
+// 			list<icoordpair>::iterator b,c;
+// 			b=a;b++;
+// 			c=b;c++;
+// 			if((b==l.end()))
+// 				break;
+// 			double d=distancePointLine(*b, *a,*c);
+// 			if((d<accuracy) )
+// 			{
+// 
+// 				if(debug) cerr<<"erasing at"<<pos<<" of "<<l.size()<<" d="<<d<<endl;
+// 				a=l.erase(b);
+// 				change=true;
+// 			}
+// 			else
+// 				a=b;
+// 			pos++;
+// 		}while(a!=l.end());
+// 		//change=false;
+// 	}
+// 	while(change);
+// 
+// 	if(debug) cout<<"copying"<<endl;
+// 	outline->resize(0);
+// 	for( list<icoordpair>::iterator a=l.begin();a!=l.end();a++)
+// 		outline->push_back(*a);
+// 	if(debug) cerr<<"outline size:"<<outline->size()<<endl;
+// 
+// }
 
 
 vector< shared_ptr<icoords> >
@@ -162,7 +167,8 @@ Surface::get_toolpath( shared_ptr<RoutingMill> mill, bool mirrored, bool mirror_
 	ivalue_t double_mirror_axis = mirror_absolute ? 0 : (min_x + max_x);
 
 	vector< shared_ptr<icoords> > toolpath;
-
+  //std::vector<coordpair > walkpixels;
+  Layer l;
 	for( int pass = 0; pass <= extra_passes && added != 0; pass++ )
 	{
 		for(int i = 0; i < grow && added != 0; i++)
@@ -173,9 +179,9 @@ Surface::get_toolpath( shared_ptr<RoutingMill> mill, bool mirrored, bool mirror_
 				added += grow_a_component(c.first, c.second, contentions);
 			}
 		}
-
+    
 		coords inside, outside;
-
+    
 		BOOST_FOREACH( coordpair c, components ) {
 			calculate_outline( c.first, c.second, outside, inside );
 			inside.clear();
@@ -184,18 +190,42 @@ Surface::get_toolpath( shared_ptr<RoutingMill> mill, bool mirrored, bool mirror_
 
 			// i'm not sure wheter this is the right place to do this...
 			// that "mirrored" flag probably is a bad idea.
+      
 			BOOST_FOREACH( coordpair c, outside ) {
+        //walkpixels.push_back(c);
+       
 				outline->push_back( icoordpair(
 							    // tricky calculations
 							    mirrored ? (double_mirror_axis - xpt2i(c.first)) : xpt2i(c.first),
 							    min_y + max_y - ypt2i(c.second) ) );
 			}
+			for(int i=0;i<outside.size()-1;i++)
+      {
+        float p[2],q[2];
+        p[0]=mirrored ? (double_mirror_axis - xpt2i(outside[i].first)) : xpt2i(outside[i].first);
+        p[1]=min_y + max_y - ypt2i(outside[i].second);
+        q[0]=mirrored ? (double_mirror_axis - xpt2i(outside[i+1].first)) : xpt2i(outside[i+1].first);
+        q[1]=min_y + max_y - ypt2i(outside[i+1].second);
+         l.addLine(p,q);
+      }
+      
+      float p[2],q[2];
+      p[0]=mirrored ? (double_mirror_axis - xpt2i(outside.back().first)) : xpt2i(outside.back().first);
+      p[1]=min_y + max_y - ypt2i(outside.back().second);
+      q[0]=mirrored ? (double_mirror_axis - xpt2i(outside.front().first)) : xpt2i(outside.front().first);
+      q[1]=min_y + max_y - ypt2i(outside.front().second);
+      l.addLine(p,q);
 
-			if(1) simplifypath(outline, 1/float(dpi)      );
+			//if(0) simplifypath(outline, 1/float(dpi)      );
 			outside.clear();
 			toolpath.push_back(outline);
 		}
-	}
+   }
+   l.findPaths();
+   l.optiPaths(0);
+   cout<<"Layer paths:"<<l.path.size()<<endl;
+
+    
 
 	if(contentions) {
 		cerr << "Warning: pcb2gcode hasn't been able to fulfill all"
@@ -205,7 +235,7 @@ Surface::get_toolpath( shared_ptr<RoutingMill> mill, bool mirrored, bool mirror_
 	}
 
 	save_debug_image("traced");
-	return toolpath;
+  return toolpath;
 }
 
 guint32 Surface::get_an_unused_color()
@@ -537,6 +567,9 @@ void Surface::calculate_outline(const int x, const int y,
 	fprintf(stderr, "blasts: %d", blasts);
 }
 
+
+
+
 guint Surface::grow_a_component(int x, int y, int& contentions)
 {
 	if( x < 0 || x >= cairo_surface->get_width() || y < 0 || y >= cairo_surface->get_height() ) {
@@ -603,7 +636,6 @@ void Surface::add_mask( shared_ptr<Surface> mask_surface) {
 	}
 }
 
-#include <boost/format.hpp>
 
 void Surface::save_debug_image(string message)
 {

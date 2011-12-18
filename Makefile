@@ -58,7 +58,7 @@ am__installdirs = "$(DESTDIR)$(bindir)"
 PROGRAMS = $(bin_PROGRAMS)
 am_pcb2gcode_OBJECTS = svg_exporter.$(OBJEXT) board.$(OBJEXT) \
 	drill.$(OBJEXT) gerberimporter.$(OBJEXT) layer.$(OBJEXT) \
-	mill.$(OBJEXT) ngc_exporter.$(OBJEXT) surface.$(OBJEXT) \
+	mill.$(OBJEXT) ngc_exporter.$(OBJEXT) surface.$(OBJEXT) geometry.$(OBJEXT) basegeo.$(OBJEXT)\
 	options.$(OBJEXT) main.$(OBJEXT)
 pcb2gcode_OBJECTS = $(am_pcb2gcode_OBJECTS)
 pcb2gcode_LDADD = $(LDADD)
@@ -269,6 +269,8 @@ top_builddir = .
 top_srcdir = .
 SUBDIRS = man
 pcb2gcode_SOURCES = \
+	basegeo.h \
+	basegeo.cpp geometry.h geometry.cpp\
 	svg_exporter.hpp \
 	svg_exporter.cpp \
 	board.hpp \
