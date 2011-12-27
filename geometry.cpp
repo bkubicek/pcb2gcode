@@ -4,28 +4,122 @@
 
 #include <cstdlib>
 #include <ctime>
+#include <sstream>
+#include <fstream>
+
+#include <limits>
 using namespace std;
 
+PosNumber DxfNgc_PositionList::doesExist(const float x[2])
+{
+  for(PosNumber i=0;i<(PosNumber)pos.size();i++)
+  {
+    float d;
+    d=fabs(pos[i].x[0]-x[0])+  fabs(pos[i].x[1]-x[1]);
+    if(d<epsilon)
+    {
+      //pos[i].usedby.push_back(owner);
+      if(verboseBaseGeo) cout<<"Old:"<<i<<"->("<<pos[i].x[0]<<" "<<pos[i].x[1]<<")"<<endl;
+      if(verboseBaseGeo)
+      {
+       cout<<"used by:";
+       for(int j=0;j<pos[i].usedby.size();j++)
+         cout<<pos[i].usedby[j]<<" ";
+       cout<<endl;
+      }
+      return i;
+    }
+  }
+  return BadPos;
+}
 
-Construct::Construct()
+DxfNgc_Construct::DxfNgc_Construct()
 {
   //layer.resize(1);
   //curlayer=&layer[0];
   srand(time(0));
 }
 
-void Construct::createLayer(const char* name)
+void DxfNgc_Construct::createLayer(const char* _name,int flags)
 {
   size_t s=layer.size();;
   layer.resize(s+1);
+  //layer.push_back(Layer());
   curlayer=&layer[s];
-  curlayer->name=name;
-   cout<<"Layer created:\""<<name<<"\""<<endl;
+  curlayer->setName(_name);
+  curlayer->hidden= (flags==1);
+  
+  cout<<"Layer created:\""<<curlayer->name<<"\""<<" "<<curlayer<<endl;
+
 }
 
-Layer::Layer()
+DxfNgc_Layer::DxfNgc_Layer()
 {
+  curpos[0]=-1e8;
+  curpos[1]=-1e8;
+  safeheight=2;
+  finaldepth=0;
+  startdepth=0;
+  stepdepth=1;
+  curz=1000;
+}
 
+void split(const std::string &s, char delim, std::vector<std::string> &elems)
+{
+ stringstream ss(s);
+ std::string item;
+ while(getline(ss,item,delim))
+ {
+  elems.push_back(item); 
+ }
+}
+void DxfNgc_Layer::setName(std::string _name)
+{
+  name=_name;
+  
+  vector<string> sl;
+  split(name, '_',sl);
+  for(int i=0;i<sl.size();i++)
+  {
+    vector<string> args;
+    if(sl[i].length())
+    {
+        split(sl[i],':',args);
+        if(args.size()==2)
+        {
+          //cout<<"pair:"<<args[0]<<"<>"<<args[1]<<endl;
+          stringstream ss(args[1]);
+          float x=numeric_limits<float>::max();
+          ss>>x;
+          if(args[0]=="safe" && x!=numeric_limits<float>::max())
+          {
+            safeheight=x;
+          } else
+          if(args[0]=="depth" && x!=numeric_limits<float>::max())
+          {
+            finaldepth=x;
+          } else
+          if(args[0]=="step" && x!=numeric_limits<float>::max())
+          {
+            stepdepth=x;
+          } else
+          if(args[0]=="start" && x!=numeric_limits<float>::max())
+          {
+            startdepth=x;
+          }else
+          {
+              cerr<<"unrecognized layer option; ";
+              cerr<<"valid is: safe, depth, step, start"<<endl;
+          }
+        }
+    }
+    
+  }
+  if(safeheight<startdepth)
+    safeheight=startdepth;
+  if(finaldepth>startdepth)
+    finaldepth=startdepth;
+   
 }
 
 BaseGeo::BaseGeo()
@@ -36,17 +130,21 @@ BaseGeo::BaseGeo()
 }
 
 
-void Layer::addVertex(float x1[2])
+void DxfNgc_Layer::addVertex(float x1[2])
 {
- 
+  Vertex *v= new Vertex;
+  vertex.push_back(v);
+  v->p[0]=pl.newpos(x1,v);
+  v->p[1]=v->p[0];
+  if(verboseBaseGeo) cout<<"Vertex created "<<v->p[0]<<endl;
 }
 
-void Layer::addLine(const float x1[2], const float x2[2])
+void DxfNgc_Layer::addLine(const float x1[2], const float x2[2], bool dropduplicates)
 {
   PosNumber p1,p2;
   p1=pl.doesExist(x1);
   p2=pl.doesExist(x2);
-  if(p1!=BadPos && p2!=BadPos)
+  if(dropduplicates&&( p1!=BadPos && p2!=BadPos))
   {
     for(int i=0;i<pl.pos[p1].usedby.size();i++)
       for(int j=0;j<pl.pos[p2].usedby.size();j++)
@@ -66,7 +164,7 @@ void Layer::addLine(const float x1[2], const float x2[2])
   if(verboseBaseGeo) cout<<"Line created "<<l->p[0]<<"<>"<<l->p[1]<<"  "<<l<<endl;
 }
 
-void Layer::addArc(const float angle1, const float angle2, const float radius,const float c[2])
+void DxfNgc_Layer::addArc(const float angle1, const float angle2, const float radius,const float c[2])
 {
   Arc *a= new Arc;
   arc.push_back(a);
@@ -84,7 +182,7 @@ void Layer::addArc(const float angle1, const float angle2, const float radius,co
   a->center[0]=c[0];
   a->center[1]=c[1];
   a->length=fabs(2*PI*radius*(angle2-angle1)/360.);
-  //if(verboseBaseGeo) 
+  if(verboseBaseGeo) 
     cout<<"Arc created "<<a->p[0]<<"<>"<<a->p[1]<<"  "<<a<<" "<<angle1<<" "<<angle2<<endl;
 
 }
@@ -93,15 +191,15 @@ void Layer::addArc(const float angle1, const float angle2, const float radius,co
 
 
 
-void Layer::findPaths()
+void DxfNgc_Layer::findPaths()
 {
-  for(int i=0;i<line.size();i++)
+  for(int i=0;i<vertex.size();i++)
   {
-   if(!line[i]->inPath)
+   if(!vertex[i]->inPath)
    {
      
-     Path p;
-     startPath(line[i],p);
+     DxfNgc_Path p;
+     startPath(vertex[i],p);
      p.calculatePos(&pl);
      
      path.push_back(p);
@@ -111,19 +209,35 @@ void Layer::findPaths()
      
    }
   }
+  for(int i=0;i<line.size();i++)
+  {
+   if(!line[i]->inPath)
+   {
+     
+     DxfNgc_Path p;
+     startPath(line[i],p);
+     p.calculatePos(&pl);
+     
+     path.push_back(p);
+//      cout<<"path begin length:"<<path.front().length<<endl;
+//      cout<<"path back length:"<<path.back().length<<endl;
+//      
+     
+   }
+  }
   
   for(int i=0;i<arc.size();i++)
   {
    if(!arc[i]->inPath)
    {
      if(verboseBaseGeo) cout<<"new arc"<<endl;
-     Path p;
+     DxfNgc_Path p;
      startPath(arc[i],p);
      
      p.calculatePos(&pl);
      path.push_back(p);
-     cout<<"path begin length:"<<path.front().length<<endl;
-     cout<<"path back length:"<<path.back().length<<endl;
+//      cout<<"path begin length:"<<path.front().length<<endl;
+//      cout<<"path back length:"<<path.back().length<<endl;
      
    }
    else
@@ -131,7 +245,7 @@ void Layer::findPaths()
   }
 }
 
-void Layer::startPath(BaseGeo* start, Path& p)
+void DxfNgc_Layer::startPath(BaseGeo* start, DxfNgc_Path& p)
 {
   if(verboseBaseGeo) cout<<"starting path"<<endl;
   PosNumber posold=start->p[0],posnow;
@@ -182,35 +296,12 @@ void Layer::startPath(BaseGeo* start, Path& p)
 
 
 
-PositionList::PositionList()
+DxfNgc_PositionList::DxfNgc_PositionList()
 {
-  epsilon=0.00001;
+  epsilon=0.0001;
 }
 
-PosNumber PositionList::doesExist(const float x[2])
-{
-  for(PosNumber i=0;i<(PosNumber)pos.size();i++)
-  {
-    float d;
-    d=fabs(pos[i].x[0]-x[0])+  fabs(pos[i].x[1]-x[1]);
-    if(d<epsilon)
-    {
-      //pos[i].usedby.push_back(owner);
-      if(verboseBaseGeo) cout<<"Old:"<<i<<"->("<<pos[i].x[0]<<" "<<pos[i].x[1]<<")"<<endl;
-      if(verboseBaseGeo)
-      {
-       cout<<"used by:";
-       for(int j=0;j<pos[i].usedby.size();j++)
-         cout<<pos[i].usedby[j]<<" ";
-       cout<<endl;
-      }
-      return i;
-    }
-  }
-  return BadPos;
-}
-
-PosNumber PositionList::newpos(const float x[2],BaseGeo *owner)
+PosNumber DxfNgc_PositionList::newpos(const float x[2],BaseGeo *owner)
 {
   for(PosNumber i=0;i<(PosNumber)pos.size();i++)
   {
@@ -242,13 +333,13 @@ PosNumber PositionList::newpos(const float x[2],BaseGeo *owner)
   return s;
 }
 
-Path::Path()
+DxfNgc_Path::DxfNgc_Path()
 {
   reverse=false;
 
 }
 
-void Path::calculatePos(PositionList* pl)
+void DxfNgc_Path::calculatePos(DxfNgc_PositionList* pl)
 {
   length=0;
   for(int i=0;i<segment.size();i++)
@@ -275,80 +366,126 @@ void Path::calculatePos(PositionList* pl)
   //if(verboseOpti) cout<<"Path: lenght="<<length<<" entry:"<<posEntry[0]<<" "<<posEntry[1]<<"  exit:"<<posExit[0]<<" "<<posExit[1]<<endl;
 }
 
-double distancePointLine(const icoordpair &x,const icoordpair &la,const  icoordpair &lb)
+float distance(float *x, float *y, float *a)
 {
-  icoordpair nab; //normal vector to a-b= {-ab_y,ab_x}
-  nab.first=-(la.second-lb.second);
-  nab.second=(la.first-lb.first);
-  double lnab=sqrt(nab.first*nab.first+nab.second*nab.second);
-  double skalar; //product
-
-  skalar=nab.first*(x.first-la.first)+nab.second*(x.second-la.second);
-  return fabs(skalar/lnab );
+  float xy[2];
+  float xa[2];
+  xy[0]=y[0]-x[0];
+  xy[1]=y[1]-x[1];
+  xa[0]=a[0]-x[0];
+  xa[1]=a[1]-x[1];
+  float l=sqrt(sqr(xy[0])+sqr(xy[1]));
+  if(l==0)
+  {
+    return 0;
+  }
+  return fabs(xy[0]*xa[1]-xy[1]*xa[0])/l;
+}
+void DxfNgc_Layer::applyBackwards()
+{
+  for(std::list<DxfNgc_Path>::iterator ps = path.begin(); ps!= path.end(); ps++)
+  {  
+    DxfNgc_Path &p=*ps;
+    
+    int start=0;
+    int end=p.segment.size();
+    
+    
+    for(int j=0;j!=p.segment.size();j++)
+    {
+      BaseGeo *bg=p.segment[j];
+      if(bg->backwards)
+      {
+        if(bg->type==GeoLine)
+        {
+          PosNumber p;
+          p=bg->p[0];
+          bg->p[0]=bg->p[1];
+          bg->p[1]=p;
+          bg->backwards=false;
+        }
+      }
+      
+    }
+  }
 }
 
-void Layer::simplifypaths(double accuracy)
+bool DxfNgc_Layer::trySimplifyLine(DxfNgc_Path &p, int seg_from, int seg_to)
 {
-//   //take two points of the path
-//   // and their interconnecting path.
-//   // if the distance between all intermediate points and this line is smaller
-//   // than the accuracy, all the points in between can be removed..
-//   int i=0;
-//   bool change;
-//   int lasterased=0;
-//   const bool debug=true;
-//   std::list<icoordpair> l;
-//   for(int i=0;i<path[i].segment->size();i++)
-//   {
-//     icoordpair &ii=(*outline)[i];
-//     l.push_back(ii);
-//   }
-// 
-//   if (debug) cerr<<"outline size:"<<outline->size()<<" accuracy"<<accuracy<<endl;
-//   int pos=0;
-//   do //cycle until no two points can be combined..
-//   {
-//     change=false;
-// 
-//     list<icoordpair>::iterator a=l.begin();
-//     do
-//     {
-//       list<icoordpair>::iterator b,c;
-//       b=a;b++;
-//       c=b;c++;
-//       if((b==l.end()))
-//         break;
-//       double d=distancePointLine(*b, *a,*c);
-//       if((d<accuracy) )
-//       {
-// 
-//         if(debug) cerr<<"erasing at"<<pos<<" of "<<l.size()<<" d="<<d<<endl;
-//         a=l.erase(b);
-//         change=true;
-//       }
-//       else
-//         a=b;
-//       pos++;
-//     }while(a!=l.end());
-//     //change=false;
-//   }
-//   while(change);
-// 
-//   if(debug) cout<<"copying"<<endl;
-//   outline->resize(0);
-//   for( list<icoordpair>::iterator a=l.begin();a!=l.end();a++)
-//     outline->push_back(*a);
-//   if(debug) cerr<<"outline size:"<<outline->size()<<endl;
-
+  //cerr<<"try:"<<seg_from<<"<>"<<seg_to<<" of "<<p.segment.size()<<endl;
+  float *from, *to;
+  from=pl.pos[p.segment[seg_from]->p[0]].x;
+  
+  to=pl.pos[p.segment[seg_to]->p[1]].x;
+  
+  const float maxdev=pl.epsilon*sqrt(2);
+  for(int i=seg_from;i<seg_to;i++)
+  {
+//     cerr<<"i"<<i<<endl;
+//     cerr<<"from="<<from[0]<<" "<<from[1]<<endl;
+//     cerr<<"to="<<to[0]<<" "<<to[1]<<endl;
+    if(p.segment[i]->type!=GeoLine)
+      return false; //only lines can be optimized
+   float d2=distance(from,to,pl.pos[p.segment[i]->p[1]].x ) ;
+   if( d2>maxdev)
+     return false;
+  }
+  //simplify=good
+  //cerr<<"simplify success"<<endl;
+  PosNumber from_p,to_p;
+  
+  p.segment[seg_from]->p[1]=p.segment[seg_to  ]->p[1];
+  
+  
+  p.segment.erase(p.segment.begin()+seg_from+1,p.segment.begin()+seg_to+1);
+  
+  //cerr<<"erase done"<<endl;
+  return true;  
 }
-void Layer::optiPaths(float _addupdown)
+
+void DxfNgc_Layer::simplifyPaths()
+{
+  cerr<<"Simplify paths"<<endl;
+  
+  applyBackwards();
+  for(list<DxfNgc_Path>::iterator ps = path.begin()++; ps!= path.end(); ps++)
+  {
+    DxfNgc_Path &p=*ps;
+    cerr<<"one path"<<endl;
+    bool found=false;
+    
+    for(int i=0;i<5;i++)
+    {
+    int laststart=1;
+   
+    if(p.segment.size()>5)
+    do
+    {
+      if(laststart+6+5>p.segment.size())
+         break;
+      for(int j=laststart;j<p.segment.size()-5-1;j++)
+      {
+        laststart=j+1;
+        if(trySimplifyLine(p,j,j+5)) 
+        {
+          found=true;
+          break;
+        }      
+      }
+      
+     }while(found  );
+    }
+    
+  }
+}
+
+void DxfNgc_Layer::optiPaths(float _addupdown)
 {
   addupdown=_addupdown;
-  if(path.size()<3  )
+  if(path.size()<3)
     return;
-  cout<<"Nr paths:"<<path.size()<<endl;
   curlength=calcLength(path);
-  cout<<"Starting Length:"<<curlength<<endl;
+  cout<<"Starting Length:"<<curlength<<" paths:"<<path.size()<<endl;
   
   PosNumber max=20*path.size()*path.size();
   
@@ -357,22 +494,23 @@ void Layer::optiPaths(float _addupdown)
     tryGreed();
     if(i%1000==0    )
      cout<<i<<":"<<" Current length:"<<curlength<<endl; 
-  }
-  int cnt=0;
+  
+  //int cnt=0;
   
 //    while(tryGreed() &&(cnt++<path.size()*10)&& !cin.rdbuf()->in_avail() )
 //    {
 //     cout<<cnt<<":"<<" Current length:"<<curlength<<endl; 
 //    }
+  }
   cout<<"Final Length:"<<curlength<<endl;
   
 }
 
-float Layer::calcLength(std::list<Path> &_path)
+float DxfNgc_Layer::calcLength(std::list<DxfNgc_Path> &_path)
 {
   float newlength=0;
   float *curpos;
-  list<Path>::iterator ps1 = _path.begin();
+  list<DxfNgc_Path>::iterator ps1 = _path.begin();
   if(!ps1->reverse)
   { 
     curpos=(ps1->posExit);
@@ -383,7 +521,7 @@ float Layer::calcLength(std::list<Path> &_path)
   }
   //if(verboseOpti) cout<<"Pathlenght="<<ps1->length<<" entry:"<<ps1->posEntry[0]<<" "<<ps1->posEntry[1]<<"  exit:"<<ps1->posExit[0]<<" "<<ps1->posExit[1]<<endl;
  
-  for(list<Path>::iterator ps = _path.begin()++; ps!= _path.end(); ps++)
+  for(list<DxfNgc_Path>::iterator ps = _path.begin()++; ps!= _path.end(); ps++)
   {
     //if(verboseOpti) cout<<"currentpos: "<<curpos[0]<<" "<<curpos[1]<<endl;
     float add=0;
@@ -404,15 +542,15 @@ float Layer::calcLength(std::list<Path> &_path)
   }
   return newlength;
 }
-void Layer::trySwap()
+void DxfNgc_Layer::trySwap()
 {
   
   PosNumber p1=rand()%path.size();
   PosNumber p2=rand()%path.size();
   //if(verboseOpti)cout<<"trying swap:"<<p1<<" "<<p2<<endl;
   if(p1==p2) return;
-  list<Path>::iterator ip1=path.begin();
-  list<Path>::iterator ip2=path.begin();
+  list<DxfNgc_Path>::iterator ip1=path.begin();
+  list<DxfNgc_Path>::iterator ip2=path.begin();
   advance(ip1,p1);
   advance(ip2,p2);
   path.splice(ip1,path,ip2);
@@ -430,8 +568,8 @@ void Layer::trySwap()
   else
   {
     //if(verboseOpti) cout<<"++++path increased"<<newlength<<" previous: "<<curlength<<endl;
-    list<Path>::iterator ip1=path.begin();
-    list<Path>::iterator ip2=path.begin();
+    list<DxfNgc_Path>::iterator ip1=path.begin();
+    list<DxfNgc_Path>::iterator ip2=path.begin();
     advance(ip1,p1);
     advance(ip2,p2);
     path.splice(ip1,path,ip2);
@@ -442,11 +580,11 @@ void Layer::trySwap()
 }
 
 
-void Layer::tryReverse()
+void DxfNgc_Layer::tryReverse()
 {
   
   PosNumber p1=rand()%path.size();
-  list<Path>::iterator ip1=path.begin();
+  list<DxfNgc_Path>::iterator ip1=path.begin();
   advance(ip1,p1);
   ip1->reverse=!ip1->reverse;
   float newlength=calcLength(path);
@@ -462,7 +600,7 @@ void Layer::tryReverse()
   }
 }
 
-bool Layer::tryGreed()
+bool DxfNgc_Layer::tryGreed()
 {
   PosNumber s=path.size();
   
@@ -477,18 +615,18 @@ bool Layer::tryGreed()
   //int rev=rand()%2;
   {
    
-      list<Path> newpath=path;
+      list<DxfNgc_Path> newpath=path;
     PosNumber p1=i;
     PosNumber p2=j;
    // if(verboseOpti)cout<<"trying swap:"<<p1<<" "<<p2<<"-"<<m<<endl;
     //if(p1==p2) return;
-    list<Path>::iterator ip1=newpath.begin();
-    list<Path>::iterator ip2=newpath.begin();
-    list<Path>::iterator ip2to=newpath.begin();
+    list<DxfNgc_Path>::iterator ip1=newpath.begin();
+    list<DxfNgc_Path>::iterator ip2=newpath.begin();
+    list<DxfNgc_Path>::iterator ip2to=newpath.begin();
     advance(ip1,p1);
     advance(ip2,p2);
     advance(ip2to,m);
-    for(list<Path>::iterator qq=ip2;qq!=ip2to;qq++)
+    for(list<DxfNgc_Path>::iterator qq=ip2;qq!=ip2to;qq++)
       if(rev) qq->reverse=!qq->reverse;
     newpath.splice(ip1,path,ip2,ip2to);
     //if(verboseOpti) cout<<"swap ok"<<endl;
@@ -521,4 +659,188 @@ bool Layer::tryGreed()
     }
   }
   return false;
+}
+
+
+
+
+
+
+void DxfNgc_Layer::exportSegment(std::ofstream &out,BaseGeo *bg)
+{
+  out.setf ( ios::fixed);
+
+  int fromindex=0;
+  int newindex=1;
+  if(bg->backwards)
+  {
+    fromindex=1;
+    newindex=0;
+  }
+  float *xfrom=pl.pos[ bg->p[fromindex]].x;
+  if((xfrom[0]!=curpos[0])||(xfrom[1]!=curpos[1])) //different position
+  {
+    out<<"G4 P0"<<endl;
+    out<<"G1 Z"<<startdepth<<" F"<<feedrate_lift<<endl; // so it is forced straight up
+    out<<"G0 Z"<<safeheight<<endl;
+    out<<"G0 X"<<xfrom[0]<<" Y"<<xfrom[1]<<endl;
+    out<<"G0 Z"<<safeheight<<endl;
+    out<<"G1 Z"<<curz<<" F"<<feedrate_dive<<endl;
+    out<<"G4 P0"<<endl;
+    out<<"F"<<feedside<<endl;
+    curpos[0]=xfrom[0];curpos[1]=xfrom[1];curpos[2]=curz;
+  }
+  else //same position 
+  if(curpos[2]!=curz) //but different height
+  {
+    out<<"G1 Z"<<curz<<endl;
+    out<<"G4 P0"<<endl;
+    curpos[2]=curz;
+  }
+  
+  float *x=pl.pos[ bg->p[newindex]].x;
+  switch(bg->type)
+  {
+    case GeoLine:
+    {   
+      out<<"G1 X"<<x[0]<<" Y"<<x[1]<<endl; 
+    }break;
+    case GeoArc:
+    {
+      bool ccw=false;
+      Arc *l=(Arc*)bg;
+      if(l->angle2>l->angle1) ccw=false;
+      if(l->backwards) ccw=!ccw;
+      if(ccw)
+        out<<"G2";
+      else
+        out<<"G3";
+      
+      out<<" X"<<x[0]<<" Y"<<x[1]<<" I"<<l->center[0]-xfrom[0]<<" J"<<l->center[1]-xfrom[1]<<endl;
+    }break;
+    case GeoVertex:
+    {
+       out<<"G1 X"<<x[0]<<" Y"<<x[1]<<endl;
+    }break;
+    default:
+      cerr<<"bad basetype"<<bg->type<<endl;
+      ;
+  }
+  curpos[0]=x[0];curpos[1]=x[1];
+}
+
+
+void DxfNgc_Layer::exportgcode(std::ofstream *_out)
+{
+  out=_out;
+  cout<<"Exporting layer \""<<name<<"\" with "<<path.size()<<" paths"<<endl;
+  *out<<endl<<"; layer "<<name<<endl;
+  cout<<"Required steps:";
+  int n=1+floor(fabs(finaldepth-startdepth)/stepdepth);
+  for(int ii=n-1;ii>=0;ii--)
+  {
+   cout<<ii*stepdepth+finaldepth<<" ";
+  }
+  cout<<endl;
+  for(int ii=n-1;ii>=0;ii--)
+  {
+    curz=123;
+    float add=ii*stepdepth;
+    curz=add+finaldepth;
+   // cout<<"curz="<<curz<<" final="<<finaldepth<<" "<<" add="<<add<<endl;
+    *out<<"; depth="<<curz<<" i="<<ii<<" stepdepth"<<stepdepth<<" finaldepth="<<finaldepth<<" "<<add<<endl;
+    
+    
+    for(std::list<DxfNgc_Path>::iterator ps = path.begin(); ps!= path.end(); ps++)
+    {  
+      DxfNgc_Path &p=*ps;
+      *out<<"G4 P0"<<endl;
+      *out<<"(new path)"<<endl;
+      //cout<<"exporting path"<<endl;
+      int start=0;
+      int end=p.segment.size();
+      if(p.reverse)
+      {
+        end=-1;
+        start=p.segment.size()-1;
+      }
+      
+      for(int j=start;j!=end;)
+      {
+        BaseGeo *bg=p.segment[j];
+        if(p.reverse)
+        {
+          bg->backwards=!bg->backwards;
+        }
+        exportSegment(*out,bg);
+        
+        if(p.reverse)
+          j--;
+        else
+          j++;
+        
+      }
+    }
+    
+    
+  }
+  *out<<"G4 P0"<<endl;
+  *out<<"G1 Z"<<startdepth<<endl; // so it is forced straight up
+  *out<<"G0 Z"<<safeheight<<endl;
+}
+
+void DxfNgc_Layer::exportgcodeDepthfirst(std::ofstream *_out)
+{
+  out=_out;
+  cerr<<"Exporting layer \""<<name<<"\""<<endl;
+  *out<<endl<<"; layer "<<name<<endl;
+  cerr<<"Required steps:";
+  int n=1+floor(fabs(finaldepth-startdepth)/stepdepth);
+  for(int ii=n-1;ii>=0;ii--)
+  {
+   cout<<ii*stepdepth+finaldepth<<" ";
+  }
+  cout<<endl;
+   
+    
+  for(std::list<DxfNgc_Path>::iterator ps = path.begin(); ps!= path.end(); ps++)
+  for(int ii=n-1;ii>=0;ii--)
+  {
+    curz=123;
+    float add=ii*stepdepth;
+    curz=add+finaldepth;
+    {  
+      
+      DxfNgc_Path &p=*ps;
+      //cout<<"exporting path"<<endl;
+      int start=0;
+      int end=p.segment.size();
+      if(p.reverse)
+      {
+        end=-1;
+        start=p.segment.size()-1;
+      }
+      
+      for(int j=start;j!=end;)
+      {
+        BaseGeo *bg=p.segment[j];
+        if(p.reverse)
+        {
+          bg->backwards=!bg->backwards;
+        }
+        exportSegment(*out,bg);
+       
+        if(p.reverse)
+          j--;
+        else
+          j++;
+        
+      }
+    }
+    
+    
+  }
+  *out<<"G4 P0"<<endl;
+  *out<<"G1 Z"<<startdepth<<endl; // so it is forced straight up
+  *out<<"G0 Z"<<safeheight<<endl;
 }

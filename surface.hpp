@@ -37,6 +37,8 @@ using Glib::ustring;
 #include "coord.hpp"
 #include "mill.hpp"
 #include "gerberimporter.hpp"
+#include "geometry.h"
+
 
 struct surface_exception : virtual std::exception, virtual boost::exception {};
 
@@ -56,6 +58,8 @@ public:
 
 	void add_mask( shared_ptr<Surface>);
 	void fill_outline(double linewidth);
+  
+  DxfNgc_Layer l; //for exporting using pathoptimization
 
 protected:
 	Glib::RefPtr<Gdk::Pixbuf> pixbuf;

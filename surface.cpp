@@ -20,7 +20,6 @@
 #include "surface.hpp"
 #include <fstream>
 #include <boost/format.hpp>
-#include "geometry.h"
 
 using namespace std;
 using std::pair;
@@ -158,6 +157,7 @@ Surface::get_toolpath( shared_ptr<RoutingMill> mill, bool mirrored, bool mirror_
 {
 	Isolator* iso = dynamic_cast<Isolator*>(mill.get());
 	int extra_passes = iso?iso->extra_passes:0;
+  l.setEpsilon(1./float(dpi)/2.);
 
 	coords components = fill_all_components();
 
@@ -168,7 +168,7 @@ Surface::get_toolpath( shared_ptr<RoutingMill> mill, bool mirrored, bool mirror_
 
 	vector< shared_ptr<icoords> > toolpath;
   //std::vector<coordpair > walkpixels;
-  Layer l;
+  
 	for( int pass = 0; pass <= extra_passes && added != 0; pass++ )
 	{
 		for(int i = 0; i < grow && added != 0; i++)
@@ -206,7 +206,7 @@ Surface::get_toolpath( shared_ptr<RoutingMill> mill, bool mirrored, bool mirror_
         p[1]=min_y + max_y - ypt2i(outside[i].second);
         q[0]=mirrored ? (double_mirror_axis - xpt2i(outside[i+1].first)) : xpt2i(outside[i+1].first);
         q[1]=min_y + max_y - ypt2i(outside[i+1].second);
-         l.addLine(p,q);
+         l.addLine(p,q,true);
       }
       
       float p[2],q[2];
@@ -214,7 +214,7 @@ Surface::get_toolpath( shared_ptr<RoutingMill> mill, bool mirrored, bool mirror_
       p[1]=min_y + max_y - ypt2i(outside.back().second);
       q[0]=mirrored ? (double_mirror_axis - xpt2i(outside.front().first)) : xpt2i(outside.front().first);
       q[1]=min_y + max_y - ypt2i(outside.front().second);
-      l.addLine(p,q);
+      l.addLine(p,q,true);
 
 			//if(0) simplifypath(outline, 1/float(dpi)      );
 			outside.clear();
@@ -222,6 +222,7 @@ Surface::get_toolpath( shared_ptr<RoutingMill> mill, bool mirrored, bool mirror_
 		}
    }
    l.findPaths();
+   l.simplifyPaths();
    l.optiPaths(0);
    cout<<"Layer paths:"<<l.path.size()<<endl;
 

@@ -15,7 +15,6 @@
 
 
 
-
 pkgdatadir = $(datadir)/pcb2gcode
 pkgincludedir = $(includedir)/pcb2gcode
 pkglibdir = $(libdir)/pcb2gcode
@@ -72,8 +71,9 @@ LTCXXCOMPILE = $(LIBTOOL) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
 	--mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) \
 	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS)
 CXXLD = $(CXX)
-#CXXLINK = $(LIBTOOL) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) -mode=link $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) $(AM_LDFLAGS) 	$(LDFLAGS) -o $@
-CXXLINK = $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) $(AM_LDFLAGS) 	$(LDFLAGS) -o $@
+CXXLINK = $(LIBTOOL) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
+	--mode=link $(CXXLD) $(AM_CXXFLAGS) $(CXXFLAGS) $(AM_LDFLAGS) \
+	$(LDFLAGS) -o $@
 COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
 	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
 LTCOMPILE = $(LIBTOOL) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) \
@@ -144,7 +144,7 @@ AUTOHEADER = ${SHELL} /home/bkubicek/git/pcb2gcode/m4/missing --run autoheader
 AUTOMAKE = ${SHELL} /home/bkubicek/git/pcb2gcode/m4/missing --run automake-1.11
 AWK = gawk
 BOOST_CPPFLAGS = -I/usr/include
-BOOST_PROGRAM_OPTIONS_LDFLAGS = -L/usr/lib -L/usr/lib
+BOOST_PROGRAM_OPTIONS_LDFLAGS = -L/usr/lib -R/usr/lib
 BOOST_PROGRAM_OPTIONS_LIBS = -lboost_program_options-mt
 CC = gcc
 CCDEPMODE = depmode=gcc3
@@ -178,7 +178,7 @@ LD = /usr/bin/ld -m elf_x86_64
 LDFLAGS = 
 LIBOBJS = 
 LIBS = $(glibmm_LIBS) $(gdkmm_LIBS) $(gerbv_LIBS) $(BOOST_PROGRAM_OPTIONS_LIBS)
-LIBTOOL = $(SHELL) $(top_builddir)/libtool
+LIBTOOL = libtool
 LIPO = 
 LN_S = ln -s
 LTLIBOBJS = 
@@ -269,8 +269,6 @@ top_builddir = .
 top_srcdir = .
 SUBDIRS = man
 pcb2gcode_SOURCES = \
-	basegeo.h \
-	basegeo.cpp geometry.h geometry.cpp\
 	svg_exporter.hpp \
 	svg_exporter.cpp \
 	board.hpp \
@@ -294,6 +292,10 @@ pcb2gcode_SOURCES = \
 	options.hpp \
 	options.cpp \
 	config.h \
+	geometry.h \
+	basegeo.h \
+	geometry.cpp \
+	basegeo.cpp \
 	main.cpp
 
 ACLOCAL_AMFLAGS = -I m4

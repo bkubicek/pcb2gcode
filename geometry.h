@@ -2,28 +2,30 @@
 #define __GEOMETRYH
 
 
+  
 
 
 #include "basegeo.h"
 
-class PositionList
+class DxfNgc_PositionList
 {
 public:
-  PositionList();
+  DxfNgc_PositionList();
   PosNumber newpos(const float x[2],BaseGeo *owner);
   PosNumber doesExist(const float x[2]);
+  
   std::vector<Position> pos;
   float epsilon;
 };
 
 
 
-class Path  //coninous list of segments
+class DxfNgc_Path  //coninous list of segments
 {
 public:
-  Path();
+  DxfNgc_Path();
   std::vector<BaseGeo*> segment;
-  void calculatePos(PositionList *pl);
+  void calculatePos(DxfNgc_PositionList *pl);
   
   float posEntry[2];
   float posExit[2];
@@ -31,47 +33,70 @@ public:
   bool reverse;
   
 };
-#include "coord.hpp"
 
 
-class Layer
+
+class DxfNgc_Layer
 {
 public:
-  Layer();
+  DxfNgc_Layer();
+  void setName(std::string _name);
+
   std::string name;
   
-  void addLine(const float x1[2],const float x2[2]);
+  void addLine(const float x1[2],const float x2[2],bool dropduplicates=false);
   void addArc(const float angle1,const float angle2,const float radius,const float c[2]);
   void addVertex(float x1[2]);
   std::vector<Line*> line;
   std::vector<Arc*> arc;
   std::vector<Vertex*> vertex;
-  PositionList pl;
+  DxfNgc_PositionList pl;
   
-  std::list<Path> path;
+  std::list<DxfNgc_Path> path;
   void findPaths();
-  void startPath(BaseGeo *start,Path &p);
-  
+  void startPath(BaseGeo *start,DxfNgc_Path &p);
+  void applyBackwards();
+  bool trySimplifyLine(DxfNgc_Path &p, int seg_from, int seg_to);
+  void simplifyPaths();
   void optiPaths(float _addupdown);
   void trySwap();
   void tryReverse();
+  void setEpsilon(float epsilon) {pl.epsilon=epsilon;};
   bool tryGreed();
-  float calcLength(std::list<Path> &path);
+  float calcLength(std::list<DxfNgc_Path> &path);
   float curlength;
   float addupdown;
+  bool hidden;
   
   float safe, depthStart,DepthMax,depthsteps;
-  void simplifypaths( double accuracy);
+  
+public: //exporting
+  float curpos[3],oldpos[3];
+  void exportgcode(std::ofstream *_out );
+  void exportgcodeDepthfirst(std::ofstream *_out);
+  void exportSegment(std::ofstream &out,BaseGeo *bg);
+  std::ofstream *out;
+
+  float safeheight;
+  float finaldepth;
+  float startdepth;
+  float stepdepth;
+  bool forcefirst;
+  float feedrate_dive;
+  float feedrate_lift;
+  float feedside;
+  float curz;
 };
 
-class Construct
+
+class DxfNgc_Construct
 {
 public:
-  Construct();
-  std::vector <Layer> layer;
-  Layer  *curlayer;
+  DxfNgc_Construct();
+  std::vector <DxfNgc_Layer> layer;
+  DxfNgc_Layer  *curlayer;
   
-  void createLayer(const char * name);
+  void createLayer(const char * name,int flags);
 };
 
 

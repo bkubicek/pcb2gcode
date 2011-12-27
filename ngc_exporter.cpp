@@ -93,6 +93,7 @@ NGC_Exporter::export_layer( shared_ptr<Layer> layer, string of_name )
 	   << "G90     ( Absolute coordinates.        )\n"
 	   << "S" << left << mill->speed << "  ( RPM spindle speed.           )\n"
 	   << "M3      ( Spindle on clockwise.        )\n"
+     << "F500      ( Spindle on clockwise.        )\n"
 	   << endl;
 
 	of << "G64 P" << get_tolerance() << " ( set maximum deviation from commanded toolpath )\n"
@@ -106,105 +107,111 @@ NGC_Exporter::export_layer( shared_ptr<Layer> layer, string of_name )
 	}
 	
 	
+  float z_step=100;
+	shared_ptr<Cutter> cutter = boost::dynamic_pointer_cast<Cutter>( mill );
+  if( cutter && cutter->do_steps ) 
+    z_step = cutter->stepsize;
+    
+  layer->export_layer(&of,false,mill->zsafe,mill->zwork,0/*startdepth*/, z_step,mill->feed,mill->feed,mill->feed);
 	// contours
- 	BOOST_FOREACH( shared_ptr<icoords> path, layer->get_toolpaths() )
-        {
-		// retract, move to the starting point of the next contour
-		of << "G04 P0 ( dwell for no time -- G64 should not smooth over this point )\n";
-		of << "G00 Z" << mill->zsafe << " ( retract )\n" << endl;
-                of << "G00 X" << path->begin()->first << " Y" << path->begin()->second << " ( rapid move to begin. )\n";
-		
-			
-		//SVG EXPORTER
-		if (bDoSVG) {						
-			svgexpo->move_to(path->begin()->first, path->begin()->second);
-			bSvgOnce = TRUE;
-		}
-			
-		/** if we're cutting, perhaps do it in multiple steps, but do isolations just once.
-		 *  i know this is partially repetitive, but this way it's easier to read
-		 */
-		shared_ptr<Cutter> cutter = boost::dynamic_pointer_cast<Cutter>( mill );
-		if( cutter && cutter->do_steps ) {
-			// cutting
-			double z_step = cutter->stepsize;
-			double z = mill->zwork + z_step * abs( int( mill->zwork / z_step ) );
-
-			while( z >= mill->zwork ) {
-				of << "G01 Z" << z << " F" << mill->feed << " ( plunge. )\n";
-				of << "G04 P0 ( dwell for no time -- G64 should not smooth over this point )\n";
-
-				icoords::iterator iter = path->begin();
-				icoords::iterator last = path->end(); // initializing to quick & dirty sentinel value
-				icoords::iterator peek;
-				while( iter != path->end() ) {
-					peek = iter + 1;
-					if( /* it's necessary to write the coordinates if... */
-							last == path->end() || /* it's the beginning */
-							peek == path->end() || /* it's the end */
-							!( /* or if neither of the axis align */
-								( last->first == iter->first && iter->first == peek->first ) || /* x axis aligns */
-								( last->second == iter->second && iter->second == peek->second ) /* y axis aligns */
-							)
-							/* no need to check for "they are on one axis but iter is outside of last and peek" becaus that's impossible from how they are generated */
-					  ) {
-						of << "X" << iter->first << " Y" << iter->second << endl;
-						
-						//SVG EXPORTER
-						if (bDoSVG) {
-							if (bSvgOnce) svgexpo->line_to(iter->first, iter->second);
-						}
-					}
-					last = iter;
-					++iter;
-				}
-				//SVG EXPORTER
-				if (bDoSVG) {
-					svgexpo->close_path();
-					bSvgOnce = FALSE;
-				}
-			
-				z -= z_step;
-			}
-		} else {
-			// isolating
-			of << "G01 Z" << mill->zwork << " F" << mill->feed << " ( plunge. )\n";
-			of << "G04 P0 ( dwell for no time -- G64 should not smooth over this point )\n";
-
-			icoords::iterator iter = path->begin();
-			icoords::iterator last = path->end(); // initializing to quick & dirty sentinel value
-			icoords::iterator peek;
-			while( iter != path->end() ) {
-				peek = iter + 1;
-				if( /* it's necessary to write the coordinates if... */
-						last == path->end() || /* it's the beginning */
-						peek == path->end() || /* it's the end */
-						!( /* or if neither of the axis align */
-							( last->first == iter->first && iter->first == peek->first ) || /* x axis aligns */
-							( last->second == iter->second && iter->second == peek->second ) /* y axis aligns */
-						)
-						/* no need to check for "they are on one axis but iter is outside of last and peek" becaus that's impossible from how they are generated */
-				  ) {
-					of << "X" << iter->first << " Y" << iter->second << endl;
-					
-					//SVG EXPORTER
-					if (bDoSVG) if (bSvgOnce) svgexpo->line_to(iter->first, iter->second);
-
-				}
-				last = iter;
-				++iter;
-			}
-			//SVG EXPORTER
-			if (bDoSVG) {
-				svgexpo->close_path();
-				bSvgOnce = FALSE;
-			}
-
-		}
-
-
-		
-        }
+//  	BOOST_FOREACH( shared_ptr<icoords> path, layer->get_toolpaths() )
+//         {
+// 		// retract, move to the starting point of the next contour
+// 		of << "G04 P0 ( dwell for no time -- G64 should not smooth over this point )\n";
+// 		of << "G00 Z" << mill->zsafe << " ( retract )\n" << endl;
+//                 of << "G00 X" << path->begin()->first << " Y" << path->begin()->second << " ( rapid move to begin. )\n";
+// 		
+// 			
+// 		//SVG EXPORTER
+// 		if (bDoSVG) {						
+// 			svgexpo->move_to(path->begin()->first, path->begin()->second);
+// 			bSvgOnce = TRUE;
+// 		}
+// 			
+// 		/** if we're cutting, perhaps do it in multiple steps, but do isolations just once.
+// 		 *  i know this is partially repetitive, but this way it's easier to read
+// 		 */
+// 		shared_ptr<Cutter> cutter = boost::dynamic_pointer_cast<Cutter>( mill );
+// 		if( cutter && cutter->do_steps ) {
+// 			// cutting
+// 			double z_step = cutter->stepsize;
+// 			double z = mill->zwork + z_step * abs( int( mill->zwork / z_step ) );
+// 
+// 			while( z >= mill->zwork ) {
+// 				of << "G01 Z" << z << " F" << mill->feed << " ( plunge. )\n";
+// 				of << "G04 P0 ( dwell for no time -- G64 should not smooth over this point )\n";
+// 
+// 				icoords::iterator iter = path->begin();
+// 				icoords::iterator last = path->end(); // initializing to quick & dirty sentinel value
+// 				icoords::iterator peek;
+// 				while( iter != path->end() ) {
+// 					peek = iter + 1;
+// 					if( /* it's necessary to write the coordinates if... */
+// 							last == path->end() || /* it's the beginning */
+// 							peek == path->end() || /* it's the end */
+// 							!( /* or if neither of the axis align */
+// 								( last->first == iter->first && iter->first == peek->first ) || /* x axis aligns */
+// 								( last->second == iter->second && iter->second == peek->second ) /* y axis aligns */
+// 							)
+// 							/* no need to check for "they are on one axis but iter is outside of last and peek" becaus that's impossible from how they are generated */
+// 					  ) {
+// 						of << "X" << iter->first << " Y" << iter->second << endl;
+// 						
+// 						//SVG EXPORTER
+// 						if (bDoSVG) {
+// 							if (bSvgOnce) svgexpo->line_to(iter->first, iter->second);
+// 						}
+// 					}
+// 					last = iter;
+// 					++iter;
+// 				}
+// 				//SVG EXPORTER
+// 				if (bDoSVG) {
+// 					svgexpo->close_path();
+// 					bSvgOnce = FALSE;
+// 				}
+// 			
+// 				z -= z_step;
+// 			}
+// 		} else {
+// 			// isolating
+// 			of << "G01 Z" << mill->zwork << " F" << mill->feed << " ( plunge. )\n";
+// 			of << "G04 P0 ( dwell for no time -- G64 should not smooth over this point )\n";
+// 
+// 			icoords::iterator iter = path->begin();
+// 			icoords::iterator last = path->end(); // initializing to quick & dirty sentinel value
+// 			icoords::iterator peek;
+// 			while( iter != path->end() ) {
+// 				peek = iter + 1;
+// 				if( /* it's necessary to write the coordinates if... */
+// 						last == path->end() || /* it's the beginning */
+// 						peek == path->end() || /* it's the end */
+// 						!( /* or if neither of the axis align */
+// 							( last->first == iter->first && iter->first == peek->first ) || /* x axis aligns */
+// 							( last->second == iter->second && iter->second == peek->second ) /* y axis aligns */
+// 						)
+// 						/* no need to check for "they are on one axis but iter is outside of last and peek" becaus that's impossible from how they are generated */
+// 				  ) {
+// 					of << "X" << iter->first << " Y" << iter->second << endl;
+// 					
+// 					//SVG EXPORTER
+// 					if (bDoSVG) if (bSvgOnce) svgexpo->line_to(iter->first, iter->second);
+// 
+// 				}
+// 				last = iter;
+// 				++iter;
+// 			}
+// 			//SVG EXPORTER
+// 			if (bDoSVG) {
+// 				svgexpo->close_path();
+// 				bSvgOnce = FALSE;
+// 			}
+// 
+// 		}
+// 
+// 
+// 		
+//         }
 
         of << endl;
 

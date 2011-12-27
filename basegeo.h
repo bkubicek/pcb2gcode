@@ -14,7 +14,7 @@ typedef  unsigned long PosNumber;
 const PosNumber BadPos=-1;
 
 const float PI= atan(1.0)*4;
-const bool verboseBaseGeo=true;
+const bool verboseBaseGeo=false;
 const bool verboseOpti=true;
 
 class PositionList;
@@ -37,8 +37,7 @@ public:
 class Vertex: public BaseGeo
 {
 public:
-  Vertex(const Position &p1);
-  PosNumber p;
+  Vertex();
 };
 
 

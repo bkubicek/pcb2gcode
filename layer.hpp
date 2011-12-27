@@ -3,6 +3,7 @@
 #define LAYER_H
 
 #include <string>
+#include <fstream>
 using std::string;
 #include <vector>
 using std::vector;
@@ -22,6 +23,8 @@ public:
 	shared_ptr<RoutingMill> get_manufacturer();
 	string get_name() { return name; };
 	void add_mask( shared_ptr<Layer>);
+  void export_layer(std::ofstream* out, bool depthfirst,float safeheight,  float finaldepth,  float startdepth, 
+    float stepdepth,float feedrate_dive, float feedrate_lift,  float feedside);
 
 private:
 	string name;

@@ -4,9 +4,10 @@
 using namespace std;
 
 
-Vertex::Vertex(const Position& p1): BaseGeo()
+Vertex::Vertex(): BaseGeo()
 {
   type=GeoVertex;
+  length=0;
 }
 
 
