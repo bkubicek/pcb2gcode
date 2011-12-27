@@ -434,10 +434,10 @@ bool DxfNgc_Layer::trySimplifyLine(DxfNgc_Path &p, int seg_from, int seg_to)
   //cerr<<"simplify success"<<endl;
   PosNumber from_p,to_p;
   
-  p.segment[seg_from]->p[1]=p.segment[seg_to  ]->p[1];
+  p.segment[seg_from]->p[1]=p.segment[seg_to  ]->p[0];
   
   
-  p.segment.erase(p.segment.begin()+seg_from+1,p.segment.begin()+seg_to+1);
+  p.segment.erase(p.segment.begin()+seg_from+1,p.segment.begin()+seg_to);
   
   //cerr<<"erase done"<<endl;
   return true;  
@@ -451,29 +451,31 @@ void DxfNgc_Layer::simplifyPaths()
   for(list<DxfNgc_Path>::iterator ps = path.begin()++; ps!= path.end(); ps++)
   {
     DxfNgc_Path &p=*ps;
-    cerr<<"one path"<<endl;
-    bool found=false;
+    //cerr<<"one path length="<<ps->segment.size()<<endl;
     
-    for(int i=0;i<5;i++)
+    for(int segsimply=10;segsimply>2;segsimply--)
     {
-    int laststart=1;
-   
-    if(p.segment.size()>5)
-    do
-    {
-      if(laststart+6+5>p.segment.size())
-         break;
-      for(int j=laststart;j<p.segment.size()-5-1;j++)
+      //cerr<<"simplify ="<<segsimply<<" "<<ps->segment.size()<<endl;
+      int laststart=0;
+    
+      bool found;
+      if(p.segment.size()>segsimply)
+      do
       {
-        laststart=j+1;
-        if(trySimplifyLine(p,j,j+5)) 
+        found=false;
+        for(int j=laststart;j<p.segment.size()-segsimply-2;j++)
         {
-          found=true;
-          break;
-        }      
-      }
-      
-     }while(found  );
+          if(j+segsimply>=p.segment.size()-2)
+            break;
+          laststart=j+1;
+          //cerr<<"try:"<<j<<"<>"<<j+segsimply<<" "<<p.segment.size()<<endl;
+          if(trySimplifyLine(p,j,j+segsimply)) 
+          {
+            found=true;
+            //break;
+          }      
+         }
+       }while(found &&laststart<p.segment.size()-segsimply-1 );
     }
     
   }
