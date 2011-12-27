@@ -46,6 +46,8 @@ class drill_exception : virtual std::exception, virtual boost::exception {};
 
 #include "mill.hpp"
 #include "svg_exporter.hpp"
+#include "geometry.h"
+
 
 
 class drillbit
@@ -101,7 +103,7 @@ private:
 	string preamble,postamble;
 
 private: //methods
-	void millhole(std::ofstream &of,float x, float y,  shared_ptr<Cutter> cutter,float holediameter);
+	void millhole(DxfNgc_Layer &l,float x, float y,  shared_ptr<Cutter> cutter,float holediameter);
 };
 
 

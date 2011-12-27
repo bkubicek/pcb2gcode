@@ -72,35 +72,37 @@ ExcellonProcessor::add_header( string header )
 void
 ExcellonProcessor::export_ngc( const string of_name, shared_ptr<Driller> driller, bool mirrored, bool mirror_absolute )
 {
-	ivalue_t double_mirror_axis = mirror_absolute ? 0 : board_width;
+  ivalue_t double_mirror_axis = mirror_absolute ? 0 : board_width;
 
-	//SVG EXPORTER
-	int rad = 1.;
-	
-	// open output file
-	std::ofstream of; of.open( of_name.c_str() );
+  //SVG EXPORTER
+  int rad = 1.;
 
-	shared_ptr<const map<int,drillbit> > bits = get_bits();
-	shared_ptr<const map<int,icoords> > holes = get_holes();	
+  // open output file
+  std::ofstream of; of.open( of_name.c_str() );
 
-	// write header to .ngc file
-        BOOST_FOREACH( string s, header )
-        {
-                of << "( " << s << " )" << endl;
-        }
-        of << endl;
+  shared_ptr<const map<int,drillbit> > bits = get_bits();
+  shared_ptr<const map<int,icoords> > holes = get_holes();	
 
-	of << "( This file uses " << bits->size() << " drill bit sizes. )\n\n";
+  // write header to .ngc file
+  BOOST_FOREACH( string s, header )
+  {
+          of << "( " << s << " )" << endl;
+  }
+  of << endl;
 
-        of.setf( ios_base::fixed );
-        of.precision(5);
-	of << setw(7);
+  of << "( This file uses " << bits->size() << " drill bit sizes. )\n\n";
 
-	// preamble
-	of << preamble
-	   << "S" << left << driller->speed << "  ( RPM spindle speed.           )\n"
-	   << endl;
+  of.setf( ios_base::fixed );
+  of.precision(5);
+  of << setw(7);
 
+  // preamble
+  of << preamble
+      << "S" << left << driller->speed << "  ( RPM spindle speed.           )\n"
+      << endl;
+
+          DxfNgc_Layer l;
+    
 	for( map<int,drillbit>::const_iterator it = bits->begin(); it != bits->end(); it++ ) {
 		of << "G00 Z" << driller->zchange << " ( Retract )\n"
 		   << "T" << it->first << endl
@@ -113,6 +115,15 @@ ExcellonProcessor::export_ngc( const string of_name, shared_ptr<Driller> driller
 
 		const icoords drill_coords = holes->at(it->first);
 		icoords::const_iterator coord_iter = drill_coords.begin();
+    l.name="milldrill";
+    l.optiPaths(driller->zsafe*2);
+    l.safeheight=driller->zsafe;
+    l.stepdepth=driller->zwork;
+    l.finaldepth=driller->zwork;
+    l.feedrate_dive=driller->feed/3.;
+    l.feedrate_lift=driller->feed;
+    l.feedside=driller->feed;
+
 
 		
 		//SVG EXPORTER
@@ -124,14 +135,14 @@ ExcellonProcessor::export_ngc( const string of_name, shared_ptr<Driller> driller
 			svgexpo->stroke();
 		}
 		
-		
-		of << "G81 R" << driller->zsafe << " Z" << driller->zwork << " F" << driller->feed 
-		   << " X" << (mirrored?double_mirror_axis - coord_iter->first:coord_iter->first) << " Y" << coord_iter->second << endl;
-		++coord_iter;
+		float p[2];
+    
 
 		while( coord_iter != drill_coords.end() ) {
-			of << "X" << (mirrored?double_mirror_axis - coord_iter->first:coord_iter->first) << " Y" << coord_iter->second << endl;
-			
+      p[0]=(mirrored?double_mirror_axis - coord_iter->first:coord_iter->first);
+      p[1]= coord_iter->second;
+			l.addVertex(p);
+      
 			//SVG EXPORTER
 			if (bDoSVG) {
 				//make a whole
@@ -141,6 +152,9 @@ ExcellonProcessor::export_ngc( const string of_name, shared_ptr<Driller> driller
 			
 			++coord_iter;
 		}
+		l.findPaths();
+    l.optiPaths(2*driller->zsafe);
+    l.exportgcodeDepthfirst(&of);
 
 		of << "\n\n";
 	}
@@ -154,44 +168,48 @@ ExcellonProcessor::export_ngc( const string of_name, shared_ptr<Driller> driller
 	of.close();
 }
 
-void ExcellonProcessor::millhole(std::ofstream &of,float x, float y,  shared_ptr<Cutter> cutter,float holediameter)
+void ExcellonProcessor::millhole(DxfNgc_Layer &l,float x, float y,  shared_ptr<Cutter> cutter,float holediameter)
 {
 	g_assert(cutter);
 	double cutdiameter=cutter->tool_diameter;
-
+  float p[2];
+  p[0]=x;p[1]=y;
 	if(cutdiameter*1.001>=holediameter)
 	{
-		of<<"G0 X"<< x<<" Y" << y<< endl;
-		//of<<"G1 Z"<<cutter->zwork<<endl;
-		//of<<"G0 Z"<<cutter->zsafe<<endl<<endl;
-    of<<"G0 Z0"<<endl;
-		of<<"G1 Z#50"<<endl;
-		of<<"G0 Z#51"<<endl<<endl;
+    
+    l.addVertex(p);
+// 		of<<"G0 X"<< x<<" Y" << y<< endl;
+// 		//of<<"G1 Z"<<cutter->zwork<<endl;
+// 		//of<<"G0 Z"<<cutter->zsafe<<endl<<endl;
+//     of<<"G0 Z0"<<endl;
+// 		of<<"G1 Z#50"<<endl;
+// 		of<<"G0 Z#51"<<endl<<endl;
 	}
 	else
 	{
 		float millr=(holediameter-cutdiameter)/2.;
-		of<<"G0 X"<< x+millr<<" Y" << y<< endl;
-		
-		double z_step = cutter->stepsize;
-		//z_step=0.01;
-		double z = cutter->zwork + z_step * abs( int( cutter->zwork / z_step ) );
-		if( !cutter->do_steps ) {
-			z=cutter->zwork;
-			z_step=1; //dummy to exit the loop
-		}
-		int stepcount=abs( int( cutter->zwork / z_step )) ;
-    of<<"G0 Z0"<<endl;
-		while( z >= cutter->zwork ) 
-		{
-			//of<<"G1 Z"<<z<<endl;
-			//of<<"G1 Z[#50+"<<stepcount<<"*#52]"<<endl;
-			of<<"G1 Z"<<cutter->zwork+stepcount*cutter->stepsize<<endl;
-			of<<"G2 X"<< x+millr<<" Y" << y<<" I"<<-millr<<" J0"<<endl;
-			z -= z_step;
-			stepcount--;
-		}
-		of<<"G0 Z"<<cutter->zsafe<<endl<<endl;
+    l.addArc(0,360,millr,p);
+// 		of<<"G0 X"<< x+millr<<" Y" << y<< endl;
+// 		
+// 		double z_step = cutter->stepsize;
+// 		//z_step=0.01;
+// 		double z = cutter->zwork + z_step * abs( int( cutter->zwork / z_step ) );
+// 		if( !cutter->do_steps ) {
+// 			z=cutter->zwork;
+// 			z_step=1; //dummy to exit the loop
+// 		}
+// 		int stepcount=abs( int( cutter->zwork / z_step )) ;
+//     of<<"G0 Z0"<<endl;
+// 		while( z >= cutter->zwork ) 
+// 		{
+// 			//of<<"G1 Z"<<z<<endl;
+// 			//of<<"G1 Z[#50+"<<stepcount<<"*#52]"<<endl;
+// 			of<<"G1 Z"<<cutter->zwork+stepcount*cutter->stepsize<<endl;
+// 			of<<"G2 X"<< x+millr<<" Y" << y<<" I"<<-millr<<" J0"<<endl;
+// 			z -= z_step;
+// 			stepcount--;
+// 		}
+// 		of<<"G0 Z"<<cutter->zsafe<<endl<<endl;
 	}
 }
 
@@ -200,65 +218,75 @@ void
 ExcellonProcessor::export_ngc( const string outputname,  shared_ptr<Cutter> target, bool mirrored, bool mirror_absolute )
 {
 
-	g_assert( mirrored == true );
-	g_assert( mirror_absolute == false );
-	cerr << "Currently Drilling "<< endl;
+  g_assert( mirrored == true );
+  g_assert( mirror_absolute == false );
+  cerr << "Currently Drilling "<< endl;
 
-	// open output file
-	std::ofstream of; of.open( outputname.c_str() );
+  // open output file
+  std::ofstream of; of.open( outputname.c_str() );
 
-	shared_ptr<const map<int,drillbit> > bits = get_bits();
-	shared_ptr<const map<int,icoords> > holes = get_holes();	
+  shared_ptr<const map<int,drillbit> > bits = get_bits();
+  shared_ptr<const map<int,icoords> > holes = get_holes();	
 
-	// write header to .ngc file
-        BOOST_FOREACH( string s, header )
-        {
-                of << "( " << s << " )" << endl;
-        }
-        of << endl;
+  // write header to .ngc file
+  BOOST_FOREACH( string s, header )
+  {
+          of << "( " << s << " )" << endl;
+  }
+  of << endl;
 
-	//of << "( This file uses " << bits->size() << " drill bit sizes. )\n\n";
-	of << "( This file uses a mill head of "<<target->tool_diameter<<" to drill the "<<bits->size() <<"bit sizes. )\n\n";
+  //of << "( This file uses " << bits->size() << " drill bit sizes. )\n\n";
+  of << "( This file uses a mill head of "<<target->tool_diameter<<" to drill the "<<bits->size() <<"bit sizes. )\n\n";
 
-        of.setf( ios_base::fixed );
-        of.precision(5);
-	of << setw(7);
+  of.setf( ios_base::fixed );
+  of.precision(5);
+  of << setw(7);
 
-	// preamble
-	of << preamble
-	   << "S" << left << target->speed << "  ( RPM spindle speed.           )\n"
-	   << endl;
-	of<<"F"<<target->feed<<endl;
-	
-	of<<"#50="<<target->zwork<<" ; zwork"<<endl;
-	of<<"#51="<<target->zsafe<<" ; zsafe"<<endl;
-	of<<"#52="<<target->stepsize<<" ; stepsize"<<endl;
-	
-	
-	for( map<int,drillbit>::const_iterator it = bits->begin(); it != bits->end(); it++ ) {
-		
-		float diameter=it->second.diameter;
-		//cerr<<"bit:"<<diameter<<endl;
-		const icoords drill_coords = holes->at(it->first);
-		icoords::const_iterator coord_iter = drill_coords.begin();
-		
-		millhole(of,  board_width - coord_iter->first, coord_iter->second, target,diameter);
-		++coord_iter;
+  // preamble
+  of << preamble
+      << "S" << left << target->speed << "  ( RPM spindle speed.           )\n"
+      << endl;
+  of<<"F"<<target->feed<<endl;
 
-		while( coord_iter != drill_coords.end() ) {
 
-			millhole(of,  board_width - coord_iter->first, coord_iter->second, target,diameter);
-			++coord_iter;
-		}
-	
-	}
 
-	// retract, end
-	of << "G00 Z" << target->zchange << " ( All done -- retract )\n" << endl;
+  DxfNgc_Layer l;
+  l.name="milldrill";
+  
+  l.safeheight=target->zsafe;
+  l.stepdepth=target->stepsize;
+  l.finaldepth=target->zwork;
+  l.feedrate_dive=target->feed/3.;
+  l.feedrate_lift=target->feed;
+  l.feedside=target->feed;
+  for( map<int,drillbit>::const_iterator it = bits->begin(); it != bits->end(); it++ ) {
+    
+    float diameter=it->second.diameter;
+    //cerr<<"bit:"<<diameter<<endl;
+    const icoords drill_coords = holes->at(it->first);
+    icoords::const_iterator coord_iter = drill_coords.begin();
+    
+    millhole(l,  board_width - coord_iter->first, coord_iter->second, target,diameter);
+    ++coord_iter;
 
-	of << postamble;
+    while( coord_iter != drill_coords.end() ) {
 
-	of.close();
+      millhole(l,  board_width - coord_iter->first, coord_iter->second, target,diameter);
+      ++coord_iter;
+    }
+
+  }
+  l.findPaths();
+  l.optiPaths(target->zsafe*2);
+ 
+  l.exportgcodeDepthfirst(&of);
+
+  // retract, end
+  of << "G00 Z" << target->zchange << " ( All done -- retract )\n" << endl;
+
+  of << postamble;
+
+  of.close();
 }
 
 void

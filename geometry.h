@@ -68,7 +68,7 @@ public:
   float addupdown;
   bool hidden;
   
-  float safe, depthStart,DepthMax,depthsteps;
+
   
 public: //exporting
   float curpos[3],oldpos[3];

@@ -682,9 +682,15 @@ void DxfNgc_Layer::exportSegment(std::ofstream &out,BaseGeo *bg)
   float *xfrom=pl.pos[ bg->p[fromindex]].x;
   if((xfrom[0]!=curpos[0])||(xfrom[1]!=curpos[1])) //different position
   {
-    out<<"G4 P0"<<endl;
-    out<<"G1 Z"<<startdepth<<" F"<<feedrate_lift<<endl; // so it is forced straight up
-    out<<"G0 Z"<<safeheight<<endl;
+    if(curpos[2]<safeheight)
+    {
+      out<<"( "<<curpos[2]<<" )"<<endl;
+      out<<"G4 P0"<<endl;
+      out<<"G1 Z"<<startdepth<<" F"<<feedrate_lift<<endl; // so it is forced straight up
+      out<<"G0 Z"<<safeheight<<endl;
+    }
+    else
+      out<<"G0 Z"<<safeheight<<endl;
     out<<"G0 X"<<xfrom[0]<<" Y"<<xfrom[1]<<endl;
     out<<"G0 Z"<<safeheight<<endl;
     out<<"G1 Z"<<curz<<" F"<<feedrate_dive<<endl;
@@ -735,6 +741,7 @@ void DxfNgc_Layer::exportSegment(std::ofstream &out,BaseGeo *bg)
 void DxfNgc_Layer::exportgcode(std::ofstream *_out)
 {
   out=_out;
+  
   cout<<"Exporting layer \""<<name<<"\" with "<<path.size()<<" paths"<<endl;
   *out<<endl<<"; layer "<<name<<endl;
   cout<<"Required steps:";
@@ -747,6 +754,8 @@ void DxfNgc_Layer::exportgcode(std::ofstream *_out)
   for(int ii=n-1;ii>=0;ii--)
   {
     curz=123;
+    curpos[2]=1000;
+    
     float add=ii*stepdepth;
     curz=add+finaldepth;
    // cout<<"curz="<<curz<<" final="<<finaldepth<<" "<<" add="<<add<<endl;
@@ -804,11 +813,11 @@ void DxfNgc_Layer::exportgcodeDepthfirst(std::ofstream *_out)
   }
   cout<<endl;
    
-    
+  curpos[2]=1000;
   for(std::list<DxfNgc_Path>::iterator ps = path.begin(); ps!= path.end(); ps++)
   for(int ii=n-1;ii>=0;ii--)
   {
-    curz=123;
+        curz=123;
     float add=ii*stepdepth;
     curz=add+finaldepth;
     {  
