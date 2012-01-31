@@ -107,6 +107,13 @@ void DxfNgc_Layer::setName(std::string _name)
           {
             startdepth=x;
           }else
+          if(args[0]=="f" && x!=numeric_limits<float>::max())
+          {
+            feedside=x;
+            feedrate_dive=x;
+            feedrate_lift=x;
+          }
+          else
           {
               cerr<<"unrecognized layer option; ";
               cerr<<"valid is: safe, depth, step, start"<<endl;
@@ -183,7 +190,7 @@ void DxfNgc_Layer::addArc(const float angle1, const float angle2, const float ra
   a->center[1]=c[1];
   a->length=fabs(2*PI*radius*(angle2-angle1)/360.);
   if(verboseBaseGeo) 
-    cout<<"Arc created "<<a->p[0]<<"<>"<<a->p[1]<<"  "<<a<<" "<<angle1<<" "<<angle2<<endl;
+    cout<<"Arc created "<<a->p[0]<<"<>"<<a->p[1]<<"  "<<a<<" "<<angle1<<" "<<angle2<<" x1:"<<x1[0]<<" "<<x1[1]<<" x2:"<<x2[0]<<" "<<x2[1]<<endl;
 
 }
 
@@ -396,7 +403,7 @@ void DxfNgc_Layer::applyBackwards()
       BaseGeo *bg=p.segment[j];
       if(bg->backwards)
       {
-        if(bg->type==GeoLine)
+        if(bg->type==GeoLine||bg->type==GeoArc)
         {
           PosNumber p;
           p=bg->p[0];
@@ -483,6 +490,7 @@ void DxfNgc_Layer::simplifyPaths()
 
 void DxfNgc_Layer::optiPaths(float _addupdown)
 {
+  return;
   addupdown=_addupdown;
   if(path.size()<3)
     return;
@@ -674,23 +682,29 @@ void DxfNgc_Layer::exportSegment(std::ofstream &out,BaseGeo *bg)
 
   int fromindex=0;
   int newindex=1;
-  if(bg->backwards)
+  
+  if(1 && bg->backwards)
   {
     fromindex=1;
     newindex=0;
   }
+  
   float *xfrom=pl.pos[ bg->p[fromindex]].x;
+  //out<<"( from "<<xfrom[0]<<" "<<xfrom[1]<<" z:"<<curz<<")"<<endl;
+  //out<<"( cur pos:"<<curpos[0]<<" "<<curpos[1]<<" "<<curpos[2]<<")"<<endl;
   if((xfrom[0]!=curpos[0])||(xfrom[1]!=curpos[1])) //different position
   {
     if(curpos[2]<safeheight)
     {
-      out<<"( "<<curpos[2]<<" )"<<endl;
+      //out<<"( heihgt smaller safe: "<<curpos[2]<<" )"<<endl;
       out<<"G4 P0"<<endl;
       out<<"G1 Z"<<startdepth<<" F"<<feedrate_lift<<endl; // so it is forced straight up
       out<<"G0 Z"<<safeheight<<endl;
+      curpos[2]=safeheight;
     }
-    else
-      out<<"G0 Z"<<safeheight<<endl;
+    //else
+    //  out<<"G0 Z"<<safeheight<<endl;
+     //out<<"( move other pos: )"<<endl;
     out<<"G0 X"<<xfrom[0]<<" Y"<<xfrom[1]<<endl;
     out<<"G0 Z"<<safeheight<<endl;
     out<<"G1 Z"<<curz<<" F"<<feedrate_dive<<endl;
@@ -705,6 +719,7 @@ void DxfNgc_Layer::exportSegment(std::ofstream &out,BaseGeo *bg)
     out<<"G4 P0"<<endl;
     curpos[2]=curz;
   }
+  
   
   float *x=pl.pos[ bg->p[newindex]].x;
   switch(bg->type)
@@ -725,6 +740,8 @@ void DxfNgc_Layer::exportSegment(std::ofstream &out,BaseGeo *bg)
         out<<"G3";
       
       out<<" X"<<x[0]<<" Y"<<x[1]<<" I"<<l->center[0]-xfrom[0]<<" J"<<l->center[1]-xfrom[1]<<endl;
+        //out<<" X"<<x[0]<<" Y"<<x[1]<<" I"<<l->center[0]-x[0]<<" J"<<l->center[1]-x[1]<<endl;
+      //cout<<"ARC export: "<<x[0]<<" "<<x[1]<<" from:"<<xfrom[0]<<" "<<xfrom[1]<<" center: "<<l->center[0]<<" "<<l->center[1]<<" "<<curpos[0]<<" "<<curpos[1]<<endl;
     }break;
     case GeoVertex:
     {
